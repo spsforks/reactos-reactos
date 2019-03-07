@@ -2928,7 +2928,7 @@ UpdateDiskLayout(
  *
  * @return  The adjacent unpartitioned region, if it exists, or NULL.
  **/
-static inline
+//static inline
 PPARTENTRY
 GetAdjUnpartitionedEntry(
     _In_ PPARTENTRY PartEntry,
