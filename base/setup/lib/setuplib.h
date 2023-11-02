@@ -66,6 +66,15 @@ struct _USETUP_DATA;
 typedef VOID
 (__cdecl *PSETUP_ERROR_ROUTINE)(IN struct _USETUP_DATA*, ...);
 
+typedef enum _ARCHITECTURE_TYPE
+{
+    ARCH_PcAT,      //< Standard BIOS-based PC-AT
+    ARCH_NEC98x86,  //< NEC PC-98
+    ARCH_Arc,       //< ARC-based (MIPS, SGI)
+    ARCH_Efi,       //< EFI and UEFI
+// Place other architectures supported by the Setup below.
+} ARCHITECTURE_TYPE;
+
 typedef struct _USETUP_DATA
 {
 /* Error handling *****/
@@ -110,7 +119,7 @@ typedef struct _USETUP_DATA
     LONG DestinationDiskNumber;
     LONG DestinationPartitionNumber;
 
-    LONG MBRInstallType;
+    LONG BootLoaderLocation;
     LONG FormatPartition;
     LONG AutoPartition;
     LONG FsType;
@@ -123,6 +132,7 @@ typedef struct _USETUP_DATA
     PGENERIC_LIST LanguageList;
 
 /* Settings *****/
+    ARCHITECTURE_TYPE ArchType; //< Target architecture (MachineType)
     PCWSTR ComputerType;
     PCWSTR DisplayType;
     // PCWSTR KeyboardDriver;
