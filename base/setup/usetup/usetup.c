@@ -508,14 +508,20 @@ GetNTOSInstallationName(
     IN SIZE_T cchBufferSize)
 {
     PNTOS_INSTALLATION NtOsInstall = (PNTOS_INSTALLATION)GetListEntryData(Entry);
-    PPARTENTRY PartEntry = NtOsInstall->PartEntry;
 
-    if (PartEntry && PartEntry->DriveLetter)
+    /* Retrieve the corresponding disk and partition */
+    PDISKENTRY DiskEntry = NULL;
+    PPARTENTRY PartEntry = NULL; // NtOsInstall->PartEntry;
+    GetDiskOrPartition(PartitionList,
+                       NtOsInstall->DiskNumber, NtOsInstall->PartitionNumber,
+                       &DiskEntry, &PartEntry);
+
+    if (PartEntry && PartEntry->Volume.DriveLetter)
     {
         /* We have retrieved a partition that is mounted */
         return RtlStringCchPrintfA(Buffer, cchBufferSize,
                                    "%C:%S  \"%S\"",
-                                   PartEntry->DriveLetter,
+                                   PartEntry->Volume.DriveLetter,
                                    NtOsInstall->PathComponent,
                                    NtOsInstall->InstallationName);
     }

@@ -1025,112 +1025,45 @@ EndCheck:
     return Result;
 }
 
-static BOOLEAN
+static
+PPARTENTRY
 GetNextUnformattedPartition(
-    IN PPARTLIST List,
-    OUT PPARTENTRY *pPartEntry)
+    _In_ PPARTLIST List,
+    _In_opt_ PPARTENTRY CurrentPart)
 {
-    PLIST_ENTRY Entry1, Entry2;
-    PDISKENTRY DiskEntry;
-    PPARTENTRY PartEntry;
-
-    for (Entry1 = List->DiskListHead.Flink;
-         Entry1 != &List->DiskListHead;
-         Entry1 = Entry1->Flink)
+    /* Loop each available disk and partition */
+    while ((CurrentPart = GetAdjPartition(List, CurrentPart,
+                                          ENUM_REGION_NEXT | ENUM_REGION_PARTITIONED)))
     {
-        DiskEntry = CONTAINING_RECORD(Entry1,
-                                      DISKENTRY,
-                                      ListEntry);
-
-        if (DiskEntry->DiskStyle == PARTITION_STYLE_GPT)
+        if (CurrentPart->New /**/&& (CurrentPart->Volume.FormatState == Unformatted)/**/)
         {
-            DPRINT("GPT-partitioned disk detected, not currently supported by SETUP!\n");
-            continue;
-        }
-
-        for (Entry2 = DiskEntry->PrimaryPartListHead.Flink;
-             Entry2 != &DiskEntry->PrimaryPartListHead;
-             Entry2 = Entry2->Flink)
-        {
-            PartEntry = CONTAINING_RECORD(Entry2, PARTENTRY, ListEntry);
-            if (PartEntry->IsPartitioned && PartEntry->New)
-            {
-                ASSERT(DiskEntry == PartEntry->DiskEntry);
-                *pPartEntry = PartEntry;
-                return TRUE;
-            }
-        }
-
-        for (Entry2 = DiskEntry->LogicalPartListHead.Flink;
-             Entry2 != &DiskEntry->LogicalPartListHead;
-             Entry2 = Entry2->Flink)
-        {
-            PartEntry = CONTAINING_RECORD(Entry2, PARTENTRY, ListEntry);
-            if (PartEntry->IsPartitioned && PartEntry->New)
-            {
-                ASSERT(DiskEntry == PartEntry->DiskEntry);
-                *pPartEntry = PartEntry;
-                return TRUE;
-            }
+            /* Found a candidate, return it */
+            return CurrentPart;
         }
     }
 
-    *pPartEntry = NULL;
-    return FALSE;
+    return NULL;
 }
 
-static BOOLEAN
+static
+PPARTENTRY
 GetNextUncheckedPartition(
-    IN PPARTLIST List,
-    OUT PPARTENTRY *pPartEntry)
+    _In_ PPARTLIST List,
+    _In_opt_ PPARTENTRY CurrentPart)
 {
-    PLIST_ENTRY Entry1, Entry2;
-    PDISKENTRY DiskEntry;
-    PPARTENTRY PartEntry;
-
-    for (Entry1 = List->DiskListHead.Flink;
-         Entry1 != &List->DiskListHead;
-         Entry1 = Entry1->Flink)
+    /* Loop each available disk and partition */
+    while ((CurrentPart = GetAdjPartition(List, CurrentPart,
+                                          ENUM_REGION_NEXT | ENUM_REGION_PARTITIONED)))
     {
-        DiskEntry = CONTAINING_RECORD(Entry1,
-                                      DISKENTRY,
-                                      ListEntry);
-
-        if (DiskEntry->DiskStyle == PARTITION_STYLE_GPT)
+        if (CurrentPart->Volume.NeedsCheck)
         {
-            DPRINT("GPT-partitioned disk detected, not currently supported by SETUP!\n");
-            continue;
-        }
-
-        for (Entry2 = DiskEntry->PrimaryPartListHead.Flink;
-             Entry2 != &DiskEntry->PrimaryPartListHead;
-             Entry2 = Entry2->Flink)
-        {
-            PartEntry = CONTAINING_RECORD(Entry2, PARTENTRY, ListEntry);
-            if (PartEntry->IsPartitioned && PartEntry->NeedsCheck)
-            {
-                ASSERT(DiskEntry == PartEntry->DiskEntry);
-                *pPartEntry = PartEntry;
-                return TRUE;
-            }
-        }
-
-        for (Entry2 = DiskEntry->LogicalPartListHead.Flink;
-             Entry2 != &DiskEntry->LogicalPartListHead;
-             Entry2 = Entry2->Flink)
-        {
-            PartEntry = CONTAINING_RECORD(Entry2, PARTENTRY, ListEntry);
-            if (PartEntry->IsPartitioned && PartEntry->NeedsCheck)
-            {
-                ASSERT(DiskEntry == PartEntry->DiskEntry);
-                *pPartEntry = PartEntry;
-                return TRUE;
-            }
+            /* Found a candidate, return it */
+            ASSERT(CurrentPart->Volume.FormatState == Formatted);
+            return CurrentPart;
         }
     }
 
-    *pPartEntry = NULL;
-    return FALSE;
+    return NULL;
 }
 
 BOOLEAN
@@ -1261,15 +1194,16 @@ NextFormat:
         }
 
         case FormatInstallVolume:
+            /* Restart partition enumeration */
+            PartEntry = NULL;
         case FormatOtherVolume:
         {
-            BOOLEAN Found = GetNextUnformattedPartition(PartitionList, &PartEntry);
-            if (Found) ASSERT(PartEntry);
+            PartEntry = GetNextUnformattedPartition(PartitionList, PartEntry);
 
             FormatState = (PartEntry ? FormatOtherVolume : FormatDone);
             DPRINT1("FormatState: %s --> %s\n",
                     FormatStateNames[OldFormatState], FormatStateNames[FormatState]);
-            if (Found)
+            if (PartEntry)
                 break;
             __fallthrough;
         }
@@ -1314,14 +1248,15 @@ StartCheckQueue:
     if (Result == FSVOL_ABORT)
         return FALSE;
 
+    PartEntry = NULL;
 NextCheck:
-    if (!GetNextUncheckedPartition(PartitionList, &PartEntry))
+    PartEntry = GetNextUncheckedPartition(PartitionList, PartEntry);
+    if (!PartEntry)
     {
         Success = TRUE;
         goto EndCheck;
     }
 
-    ASSERT(PartEntry);
     Result = DoChecking(PartEntry, Context, FsVolCallback);
     if (Result == FSVOL_ABORT)
     {
